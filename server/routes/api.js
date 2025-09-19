@@ -33,26 +33,26 @@ const saveDataSchema = Joi.object({
     country: Joi.string().required().trim().min(1).max(100),
     latitude: Joi.number().required().min(-90).max(90),
     longitude: Joi.number().required().min(-180).max(180),
-    population: Joi.number().required().min(0),
-    populationDensity: Joi.number().allow(null),
+    population: Joi.number().min(0).default(0),
+    populationDensity: Joi.number().min(0).allow(null).default(null),
     airQuality: Joi.object({
-        pm25: Joi.number().allow(null),
-        pm10: Joi.number().allow(null),
-        no2: Joi.number().allow(null),
-        so2: Joi.number().allow(null),
-        o3: Joi.number().allow(null),
-        co: Joi.number().allow(null),
-        lastUpdated: Joi.date().allow(null),
-        source: Joi.string().allow(null)
-    }).required(),
+        pm25: Joi.number().allow(null).default(null),
+        pm10: Joi.number().allow(null).default(null),
+        no2: Joi.number().allow(null).default(null),
+        so2: Joi.number().allow(null).default(null),
+        o3: Joi.number().allow(null).default(null),
+        co: Joi.number().allow(null).default(null),
+        lastUpdated: Joi.date().allow(null).default(null),
+        source: Joi.string().allow(null).default('Unknown')
+    }).default({}),
     weather: Joi.object({
-        temperature: Joi.number().required(),
-        humidity: Joi.number().required().min(0).max(100),
-        pressure: Joi.number().allow(null),
-        visibility: Joi.number().allow(null),
-        windSpeed: Joi.number().allow(null),
-        description: Joi.string().allow(null)
-    }).required(),
+        temperature: Joi.number().default(0),
+        humidity: Joi.number().min(0).max(100).default(0),
+        pressure: Joi.number().allow(null).default(null),
+        visibility: Joi.number().allow(null).default(null),
+        windSpeed: Joi.number().allow(null).default(null),
+        description: Joi.string().allow(null).default('Unknown')
+    }).default({}),
     rawData: Joi.object().optional()
 });
 
@@ -322,48 +322,101 @@ router.get('/aggregate/:cityId', validateApiKey, async (req, res) => {
     }
 });
 
-// 6. Save wellbeing data to database
+// 6. Save wellbeing data to database (IMPROVED VERSION)
 router.post('/save', [validateApiKey, requireAuth], async (req, res) => {
     try {
-        // Validate request data
-        const { error, value } = saveDataSchema.validate(req.body);
+        console.log('📥 Received save request:', req.body);
+        
+        // Validate request data with detailed error reporting
+        const { error, value } = saveDataSchema.validate(req.body, { 
+            abortEarly: false, // Show all validation errors
+            allowUnknown: true // Allow extra fields
+        });
+        
         if (error) {
+            console.log('❌ Validation failed:', error.details);
             return res.status(400).json({ 
                 error: 'Validation failed', 
-                details: error.details.map(d => d.message) 
+                details: error.details.map(d => ({
+                    field: d.path.join('.'),
+                    message: d.message,
+                    value: d.context?.value
+                }))
             });
         }
         
-        // Create new record
+        // Ensure required fields have default values
         const recordData = {
             ...value,
             userId: req.user.googleId,
-            userEmail: req.user.email
+            userEmail: req.user.email,
+            
+            // Ensure airQuality object has structure
+            airQuality: {
+                pm25: value.airQuality?.pm25 || null,
+                pm10: value.airQuality?.pm10 || null,
+                no2: value.airQuality?.no2 || null,
+                so2: value.airQuality?.so2 || null,
+                o3: value.airQuality?.o3 || null,
+                co: value.airQuality?.co || null,
+                lastUpdated: value.airQuality?.lastUpdated || null,
+                source: value.airQuality?.source || 'Unknown'
+            },
+            
+            // Ensure weather object has required fields
+            weather: {
+                temperature: value.weather?.temperature || 0,
+                humidity: value.weather?.humidity || 0,
+                pressure: value.weather?.pressure || null,
+                visibility: value.weather?.visibility || null,
+                windSpeed: value.weather?.windSpeed || null,
+                description: value.weather?.description || 'Unknown'
+            },
+            
+            // Default population values
+            population: value.population || 0,
+            populationDensity: value.populationDensity || null
         };
         
+        console.log('💾 Saving record data:', recordData);
+        
+        // Create new record
         const record = new Record(recordData);
         
-        // Calculate wellbeing score
-        record.calculateWellbeingScore();
+        // The wellbeing score will be calculated automatically by the pre-save middleware
         
         // Save to database
         await record.save();
         
+        console.log('✅ Record saved successfully:', record._id);
+        
         res.status(201).json({ 
             message: 'Data saved successfully',
             recordId: record._id,
-            wellbeingScore: record.wellbeingScore
+            wellbeingScore: record.wellbeingScore,
+            city: record.city,
+            country: record.country
         });
         
     } catch (error) {
-        console.error('Save data error:', error.message);
+        console.error('❌ Save data error:', error);
+        
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ 
+                error: 'Database validation failed',
+                details: Object.keys(error.errors).map(key => ({
+                    field: key,
+                    message: error.errors[key].message
+                }))
+            });
+        }
+        
         res.status(500).json({ 
             error: 'Failed to save data',
             details: error.message
         });
     }
 });
-
 // 7. Get saved records
 router.get('/records', [validateApiKey, requireAuth], async (req, res) => {
     try {
@@ -502,6 +555,24 @@ router.get('/health', (req, res) => {
         uptime: process.uptime(),
         version: '1.0.0'
     });
+});
+
+//  debug route 
+router.get('/debug/database-info', validateApiKey, async (req, res) => {
+    try {
+        const dbName = mongoose.connection.db.databaseName;
+        const collections = await mongoose.connection.db.listCollections().toArray();
+        const recordsCount = await Record.countDocuments();
+        
+        res.json({
+            currentDatabase: dbName,
+            availableCollections: collections.map(c => c.name),
+            recordsCount: recordsCount,
+            connectionString: process.env.MONGODB_URI ? 'Set' : 'Not Set'
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 module.exports = router;

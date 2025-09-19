@@ -77,6 +77,31 @@ mongoose.connect(process.env.MONGODB_URI, {
     process.exit(1);
 });
 
+mongoose.connection.on('connected', () => {
+    console.log('✅ Mongoose connected to MongoDB Atlas');
+});
+
+mongoose.connection.on('error', (err) => {
+    console.error('❌ Mongoose connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.log('⚠️ Mongoose disconnected');
+});
+
+// Test database connection
+mongoose.connection.once('open', async () => {
+    console.log('🔍 Testing database connection...');
+    try {
+        // Test if we can create a collection
+        const collections = await mongoose.connection.db.listCollections().toArray();
+        console.log('📊 Available collections:', collections.map(c => c.name));
+        console.log('✅ Database connection test passed');
+    } catch (error) {
+        console.error('❌ Database connection test failed:', error);
+    }
+});
+
 // Routes
 app.use('/api', apiRoutes);
 

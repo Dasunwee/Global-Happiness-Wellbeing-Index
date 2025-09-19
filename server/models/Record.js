@@ -106,31 +106,31 @@ const recordSchema = new mongoose.Schema({
         }
     },
     
-    // Calculated scores
+    // Calculated scores - Make these NOT required initially
     wellbeingScore: {
         total: {
             type: Number,
-            required: true,
             min: 0,
-            max: 100
+            max: 100,
+            default: 0  // Add default value
         },
         airQualityScore: {
             type: Number,
-            required: true,
             min: 0,
-            max: 100
+            max: 100,
+            default: 0  // Add default value
         },
         temperatureScore: {
             type: Number,
-            required: true,
             min: 0,
-            max: 100
+            max: 100,
+            default: 0  // Add default value
         },
         populationScore: {
             type: Number,
-            required: true,
             min: 0,
-            max: 100
+            max: 100,
+            default: 0  // Add default value
         }
     },
     
@@ -165,49 +165,62 @@ recordSchema.virtual('location').get(function() {
     return `${this.city}, ${this.country}`;
 });
 
-// Method to update wellbeing score
+// Method to calculate wellbeing scores
 recordSchema.methods.calculateWellbeingScore = function() {
-    // Air Quality Score (40%) - Lower PM2.5 is better
-    let airScore = 0;
-    if (this.airQuality.pm25 !== null) {
-        // WHO guideline: PM2.5 annual mean should not exceed 5 μg/m³
-        // Scale: 0-5 = 100, 5-15 = 80, 15-25 = 60, 25-35 = 40, 35+ = 20
-        if (this.airQuality.pm25 <= 5) airScore = 100;
-        else if (this.airQuality.pm25 <= 15) airScore = 80;
-        else if (this.airQuality.pm25 <= 25) airScore = 60;
-        else if (this.airQuality.pm25 <= 35) airScore = 40;
+    console.log('🔢 Calculating wellbeing scores...');
+    
+    // Air Quality Score (40%)
+    let airScore = 50; // Default if no data
+    if (this.airQuality && this.airQuality.pm25 !== null && this.airQuality.pm25 !== undefined) {
+        const pm25 = parseFloat(this.airQuality.pm25);
+        if (pm25 <= 5) airScore = 100;
+        else if (pm25 <= 15) airScore = 80;
+        else if (pm25 <= 25) airScore = 60;
+        else if (pm25 <= 35) airScore = 40;
         else airScore = 20;
+        console.log(`Air quality PM2.5: ${pm25}, Score: ${airScore}`);
     } else {
-        airScore = 50; // Default if no data
+        console.log('No air quality data, using default score: 50');
     }
     
     // Temperature Score (30%) - Ideal around 20-25°C
-    const idealTemp = 22.5;
-    const tempDiff = Math.abs(this.weather.temperature - idealTemp);
-    let tempScore = Math.max(0, 100 - (tempDiff * 3)); // Decrease by 3 points per degree
+    let tempScore = 50; // Default if no data
+    if (this.weather && this.weather.temperature !== null && this.weather.temperature !== undefined) {
+        const idealTemp = 22.5;
+        const temp = parseFloat(this.weather.temperature);
+        const tempDiff = Math.abs(temp - idealTemp);
+        tempScore = Math.max(0, 100 - (tempDiff * 3));
+        console.log(`Temperature: ${temp}°C, Ideal: ${idealTemp}°C, Diff: ${tempDiff}, Score: ${tempScore}`);
+    } else {
+        console.log('No temperature data, using default score: 50');
+    }
     
     // Population Score (30%) - Less crowded is better
-    let popScore = 100;
-    if (this.populationDensity) {
-        // Scale based on population density (people per km²)
-        if (this.populationDensity > 10000) popScore = 20;
-        else if (this.populationDensity > 5000) popScore = 40;
-        else if (this.populationDensity > 2000) popScore = 60;
-        else if (this.populationDensity > 500) popScore = 80;
+    let popScore = 50; // Default
+    if (this.populationDensity && this.populationDensity > 0) {
+        const density = parseFloat(this.populationDensity);
+        if (density > 10000) popScore = 20;
+        else if (density > 5000) popScore = 40;
+        else if (density > 2000) popScore = 60;
+        else if (density > 500) popScore = 80;
         else popScore = 100;
+        console.log(`Population density: ${density}/km², Score: ${popScore}`);
+    } else if (this.population && this.population > 0) {
+        const pop = parseFloat(this.population);
+        if (pop > 10000000) popScore = 20;
+        else if (pop > 5000000) popScore = 40;
+        else if (pop > 1000000) popScore = 60;
+        else if (pop > 100000) popScore = 80;
+        else popScore = 100;
+        console.log(`Population: ${pop}, Score: ${popScore}`);
     } else {
-        // Use total population as fallback
-        if (this.population > 10000000) popScore = 20;
-        else if (this.population > 5000000) popScore = 40;
-        else if (this.population > 1000000) popScore = 60;
-        else if (this.population > 100000) popScore = 80;
-        else popScore = 100;
+        console.log('No population data, using default score: 50');
     }
     
     // Calculate weighted total
     const totalScore = (airScore * 0.4) + (tempScore * 0.3) + (popScore * 0.3);
     
-    // Update the record
+    // Update the record with calculated scores
     this.wellbeingScore = {
         total: Math.round(totalScore),
         airQualityScore: Math.round(airScore),
@@ -215,7 +228,19 @@ recordSchema.methods.calculateWellbeingScore = function() {
         populationScore: Math.round(popScore)
     };
     
+    console.log(`✅ Final wellbeing scores calculated:`, this.wellbeingScore);
     return this.wellbeingScore;
 };
+
+// Pre-save middleware to ensure wellbeing score is calculated
+recordSchema.pre('save', function(next) {
+    console.log('🔄 Pre-save middleware triggered');
+    
+    // Always calculate the wellbeing score before saving
+    this.calculateWellbeingScore();
+    
+    console.log('✅ Wellbeing score set:', this.wellbeingScore);
+    next();
+});
 
 module.exports = mongoose.model('Record', recordSchema);

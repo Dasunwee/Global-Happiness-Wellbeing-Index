@@ -7,7 +7,7 @@ let scoreChart = null;
 // API configuration
 const API_CONFIG = {
     baseURL: '',  // Empty for same origin
-    apiKey:100200300400500600777 // IMPORTANT: Replace this with your actual API key from .env
+    apiKey: 100200300400555 // IMPORTANT: Replace this with your actual API key from .env
 };
 
 // DOM elements
