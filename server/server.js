@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../.env' });
+require('dotenv').config({ path: process.env.NODE_ENV === 'production' ? '.env' : '../.env' });
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -32,8 +32,31 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // CORS configuration
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000', 
+    'http://localhost:5500',
+    // Allow Vercel deployment URLs
+    /^https:\/\/.*\.vercel\.app$/,
+    // Allow custom domain if provided
+    ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
+];
+
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5500'],
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, curl, etc.)
+        if (!origin) return callback(null, true);
+        
+        // Check if origin is allowed
+        const isAllowed = allowedOrigins.some(allowed => {
+            if (typeof allowed === 'string') return allowed === origin;
+            return allowed.test(origin);
+        });
+        
+        if (isAllowed) return callback(null, true);
+        
+        callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key']
@@ -53,8 +76,12 @@ app.use(session({
     saveUninitialized: false,
     cookie: {
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+    },
+    name: 'sessionId', // Custom session name
+    proxy: process.env.NODE_ENV === 'production' // Trust proxy in production
 }));
 
 // Passport middleware
@@ -65,42 +92,54 @@ app.use(passport.session());
 app.use(express.static(path.join(__dirname, '../client')));
 
 // MongoDB connection
-mongoose.connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-})
-.then(() => {
-    console.log('✅ Connected to MongoDB Atlas');
-})
-.catch((error) => {
-    console.error('❌ MongoDB connection error:', error.message);
-    process.exit(1);
-});
+if (!process.env.MONGODB_URI) {
+    console.warn('⚠️ MongoDB URI not provided. Database functionality will be disabled.');
+} else {
+    mongoose.connect(process.env.MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        // Add production-friendly options
+        serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
+        socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+        bufferMaxEntries: 0, // Disable mongoose buffering
+        bufferCommands: false, // Disable mongoose buffering
+    })
+    .then(() => {
+        console.log('✅ Connected to MongoDB Atlas');
+    })
+    .catch((error) => {
+        console.error('❌ MongoDB connection error:', error.message);
+        // Don't exit process in serverless environments
+        if (process.env.NODE_ENV !== 'production') {
+            process.exit(1);
+        }
+    });
 
-mongoose.connection.on('connected', () => {
-    console.log('✅ Mongoose connected to MongoDB Atlas');
-});
+    mongoose.connection.on('connected', () => {
+        console.log('✅ Mongoose connected to MongoDB Atlas');
+    });
 
-mongoose.connection.on('error', (err) => {
-    console.error('❌ Mongoose connection error:', err);
-});
+    mongoose.connection.on('error', (err) => {
+        console.error('❌ Mongoose connection error:', err);
+    });
 
-mongoose.connection.on('disconnected', () => {
-    console.log('⚠️ Mongoose disconnected');
-});
+    mongoose.connection.on('disconnected', () => {
+        console.log('⚠️ Mongoose disconnected');
+    });
 
-// Test database connection
-mongoose.connection.once('open', async () => {
-    console.log('🔍 Testing database connection...');
-    try {
-        // Test if we can create a collection
-        const collections = await mongoose.connection.db.listCollections().toArray();
-        console.log('📊 Available collections:', collections.map(c => c.name));
-        console.log('✅ Database connection test passed');
-    } catch (error) {
-        console.error('❌ Database connection test failed:', error);
-    }
-});
+    // Test database connection
+    mongoose.connection.once('open', async () => {
+        console.log('🔍 Testing database connection...');
+        try {
+            // Test if we can create a collection
+            const collections = await mongoose.connection.db.listCollections().toArray();
+            console.log('📊 Available collections:', collections.map(c => c.name));
+            console.log('✅ Database connection test passed');
+        } catch (error) {
+            console.error('❌ Database connection test failed:', error);
+        }
+    });
+}
 
 // Routes
 app.use('/api', apiRoutes);
