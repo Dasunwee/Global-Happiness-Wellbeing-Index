@@ -1,12 +1,46 @@
 {
   "version": 2,
   "builds": [
-    { "src": "server/server.js", "use": "@vercel/node" },
-    { "src": "client/**/*", "use": "@vercel/static" }
+    { 
+      "src": "server/server.js", 
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["server/**"]
+      }
+    },
+    { 
+      "src": "client/**/*", 
+      "use": "@vercel/static" 
+    }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "server/server.js" },
-    { "src": "/auth/(.*)", "dest": "server/server.js" },
-    { "src": "/(.*)", "dest": "/client/index.html" }
-  ]
+    { 
+      "src": "/api/(.*)", 
+      "dest": "server/server.js" 
+    },
+    { 
+      "src": "/auth/(.*)", 
+      "dest": "server/server.js" 
+    },
+    {
+      "src": "/favicon.ico",
+      "dest": "/client/favicon.ico"
+    },
+    {
+      "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))",
+      "dest": "/client/$1"
+    },
+    { 
+      "src": "/(.*)", 
+      "dest": "/client/index.html" 
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "functions": {
+    "server/server.js": {
+      "maxDuration": 30
+    }
+  }
 }

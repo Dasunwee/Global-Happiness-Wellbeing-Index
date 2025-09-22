@@ -1,0 +1,12 @@
+.env
+.env.local
+.env.production
+.env.staging
+node_modules
+npm-debug.log*
+.DS_Store
+*.log
+.vscode
+.idea
+README_NEW.md
+server/test-env.js

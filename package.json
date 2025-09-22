@@ -1,0 +1,28 @@
+{
+  "name": "global-happiness-wellbeing-index",
+  "version": "1.0.0",
+  "description": "A comprehensive platform for analyzing global happiness and wellbeing metrics across cities worldwide",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "build": "echo 'No build process required for static assets'",
+    "vercel-build": "cd server && npm install"
+  },
+  "keywords": [
+    "happiness",
+    "wellbeing",
+    "cities",
+    "global",
+    "index",
+    "air-quality",
+    "weather",
+    "population"
+  ],
+  "author": "Dasunwee",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.x"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
