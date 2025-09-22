@@ -278,13 +278,16 @@ router.get('/aggregate/:cityId', validateApiKey, async (req, res) => {
         const city = cityResponse.data.data;
         const { latitude, longitude } = city;
         
+        // Get the base URL for internal API calls
+        const baseURL = req.protocol + '://' + req.get('host');
+        
         // Get air quality and weather data in parallel
         const [airQualityRes, weatherRes] = await Promise.allSettled([
-            axios.get('http://localhost:3000/api/air-quality', {
+            axios.get(`${baseURL}/api/air-quality`, {
                 headers: { 'x-api-key': process.env.API_KEY },
                 params: { latitude, longitude }
             }),
-            axios.get('http://localhost:3000/api/weather', {
+            axios.get(`${baseURL}/api/weather`, {
                 headers: { 'x-api-key': process.env.API_KEY },
                 params: { latitude, longitude }
             })

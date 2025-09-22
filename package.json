@@ -1,0 +1,44 @@
+{
+  "name": "global-happiness-wellbeing-index",
+  "version": "1.0.0",
+  "description": "A comprehensive platform for tracking global happiness and wellbeing metrics",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "build": "echo 'No build process needed for this project'",
+    "test": "echo \"No tests specified\" && exit 0",
+    "postinstall": "cd server && npm install"
+  },
+  "keywords": [
+    "happiness",
+    "wellbeing",
+    "global-index",
+    "cities",
+    "air-quality",
+    "weather",
+    "mongodb"
+  ],
+  "author": "Dasunwee",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.12.2",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "express-session": "^1.18.2",
+    "helmet": "^8.1.0",
+    "joi": "^18.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "4.1",
+    "mongoose": "^8.18.1",
+    "morgan": "^1.10.1",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0"
+  }
+}
