@@ -1,0 +1,7 @@
+{
+  "name": "Global-Happiness-Wellbeing-Index",
+  "private": true,
+  "scripts": {
+    "start": "npm --prefix server start"
+  }
+}
